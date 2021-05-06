@@ -7,6 +7,8 @@ Created on Thu May  6 12:58:38 2021
 import cv2
 import mediapipe as mp
 import numpy as np
+from sklearn.preprocessing import StandardScaler
+# import tensorflow as tf
     
 def split_sequences(sequences, n_steps):
   X = list()
@@ -26,6 +28,7 @@ def split_sequences(sequences, n_steps):
 
   return Y
 
+# model = tf.keras.models.load_model('saved_model.pb')
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 
@@ -80,13 +83,16 @@ while cap.isOpened():
     ## Referesh every 32 frames ##
     if frame_count == 32:
         buffer = np.asarray(keypoints)
+        
         keypoints=[]
         frame_count=0
         
         ##obtain vector of keypoints
         X = np.array(np.split(buffer,32))
+        X=StandardScaler().fit_transform(X)
         X = X.reshape(1,X.shape[0],X.shape[1])
-        #print(X.shape)
+        #print(X)
+        #break
         
     # Draw the pose annotation on the image.
     image.flags.writeable = True
