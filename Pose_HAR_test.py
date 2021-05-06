@@ -91,7 +91,10 @@ while cap.isOpened():
         X = np.array(np.split(buffer,32))
         X=StandardScaler().fit_transform(X)
         X = X.reshape(1,X.shape[0],X.shape[1])
-        #print(X)
+        X=split_sequences(X[0],30)
+        
+        # Y=model.predict(X)
+        print(X.shape)
         #break
         
     # Draw the pose annotation on the image.
