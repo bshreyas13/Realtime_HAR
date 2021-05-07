@@ -8,13 +8,16 @@ import cv2
 import mediapipe as mp
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-# import tensorflow as tf
+import tensorflow as tf
+from tensorflow.keras.layers import Input
+import PIL
+import os
     
-def split_sequences(sequences, n_steps):
+def split_sequences(sequences, n_steps, overlap):
   X = list()
   sequences_new=sequences.tolist()
  
-  for i in range(0,sequences.shape[0],10):
+  for i in range(0,sequences.shape[0], int(np.ceil(overlap*n_steps))):
 		# find the end of this pattern
     end_ix=i+n_steps
 		# check if we are beyond the dataset 
@@ -23,15 +26,28 @@ def split_sequences(sequences, n_steps):
     else:
       X.append(sequences_new[i:end_ix])
     
+
   X=np.asarray(X)
   Y=np.concatenate(X)
+    
 
   return Y
 
-# model = tf.keras.models.load_model('saved_model.pb')
+tf.saved_model.LoadOptions(
+    experimental_io_device=None)
+model = tf.keras.models.load_model(os.getcwd())
+LABELS = [    
+    "JUMPING",
+    "JUMPING_JACKS",
+    "BOXING",
+    "WAVING_2HANDS",
+    "WAVING_1HAND",
+    "CLAPPING_HANDS"
+] 
+
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
-
+idx = None 
 ## LIST of 18 LandMarks to extract
 landmarks_list = [mp_pose.PoseLandmark.NOSE,mp_pose.PoseLandmark.LEFT_EYE,
                mp_pose.PoseLandmark.RIGHT_EYE,mp_pose.PoseLandmark.LEFT_EAR,
@@ -54,9 +70,8 @@ while cap.isOpened():
     success, image = cap.read()
     frame_count += 1
     if not success:
-      print("Ignoring empty camera frame.")
-      # If loading a video, use 'break' instead of 'continue'.
-      continue
+
+        continue
     
     # Flip the image horizontally for a later selfie-view display, and convert
     # the BGR image to RGB.
@@ -76,30 +91,57 @@ while cap.isOpened():
                 keypoints.append( Hip_y/2 * image.shape[1])
             else:   
                 keypoints.append(results.pose_landmarks.landmark[landmark].x*image.shape[1])
+                #print("kp:",results.pose_landmarks.landmark[landmark].x*image.shape[1])
                 keypoints.append(results.pose_landmarks.landmark[landmark].y*image.shape[0])
-        #print(keypoints_frame)
-        #print(len(keypoints))
-        #break
+        
+                
+        #print(keypoints)
+        #print(frame_count)
+    
+    else:
+        keypoints_h = []
+        for k in range(18*2):
+            keypoints.append(0.0)  
+            #print(keypoints)
     ## Referesh every 32 frames ##
     if frame_count == 32:
         buffer = np.asarray(keypoints)
-        
+        #print(buffer[:36])
+        #break
         keypoints=[]
-        frame_count=0
+        frame_count = 0
         
         ##obtain vector of keypoints
         X = np.array(np.split(buffer,32))
         X=StandardScaler().fit_transform(X)
-        X = X.reshape(1,X.shape[0],X.shape[1])
-        X=split_sequences(X[0],30)
-        
-        # Y=model.predict(X)
+        X=X.reshape(1,32,36)
+        Z=list()
+        for i in range(X.shape[0]):
+            Z.append(split_sequences(X[i],32,0.5))
+        X=np.array(Z)       
         print(X.shape)
-        #break
+        
+        Y=model.predict(X)
+        y = Y.tolist()
+        idx = y[0].index(max(y[0]))
+    
+    if idx == None :
+        continue
+    image.flags.writeable = True
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    orgin = (int(image.shape[0]/2), int(image.shape[1]*0.7))  
+    fontScale = 1
+    color = (255, 255, 255) 
+    thickness = 2
+    image = cv2.putText(image, LABELS[idx], orgin, font,  
+               fontScale, color, thickness, cv2.LINE_AA) 
+
+    # #print(Y.shape)
         
     # Draw the pose annotation on the image.
-    image.flags.writeable = True
+    
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    
     mp_drawing.draw_landmarks(
         image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
     cv2.imshow('MediaPipe Pose', image)
